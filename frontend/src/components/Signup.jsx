@@ -191,7 +191,7 @@ const SignUp = () => {
               </div>
             </div>
 
-            {/* TNC */}
+        
             <div className=" flex items-start mt-2 sm:mt-3 md:mt-4">
               <div className=" flex items-center h-5 mt-0.5 sm:mt-1">
                 <input type="checkbox" id="terms" name="terms" checked={acceptedTerms}
