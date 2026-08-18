@@ -119,7 +119,7 @@ const SignUp = () => {
             </div>
             <h1 className={signupStyles.signupCard.title}>Join PremiumDrive</h1>
             <p className={signupStyles.signupCard.subtitle}>
-              Create your exclusive account
+              Create your exclusive accountt
             </p>
           </div>
 
