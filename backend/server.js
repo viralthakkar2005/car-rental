@@ -10,6 +10,8 @@ import {fileURLToPath} from 'url';
 import { connectDB } from './config/db.js';
 import userRouter from './routes/userRoutes.js';
 import carRouter from './routes/carRoutes.js';
+import bookingRouter from './routes/bookingRoutes.js';
+import paymentRouter from './routes/paymentRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -36,6 +38,9 @@ express.static(path.join(process.cwd(),'uploads'))
 // routes
 app.use('/api/auth', userRouter);
 app.use('/api/cars',carRouter);
+app.use('/api/bookings',bookingRouter);
+app.use('/api/payments',paymentRouter);
+
 
 app.get('/api/ping', (req, res) =>
   res.json({ ok: true, time: Date.now() })
