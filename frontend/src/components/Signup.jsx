@@ -32,22 +32,30 @@ const SignUp = () => {
   };
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!acceptedTerms) {
-      toast.error('Please accept terms & conditions', { theme: 'dark' });
-      return;
-    }
+  e.preventDefault();
 
-    toast.success('Account created successfully! Welcome to PremiumDrive', {
-      position: "top-right",
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      theme: 'dark',
-      onClose: () => navigate('/login')
-    });
-  };
+  if (!formData.password || formData.password.length < 8) {
+    toast.error('Password must be at least 8 characters', { theme: 'dark' });
+    return;
+  }
+
+  if (!acceptedTerms) {
+    toast.error('Please accept terms & conditions', { theme: 'dark' });
+    return;
+  }
+
+  console.log("Signup data:", formData);
+
+  toast.success('Account created successfully! Welcome to PremiumDrive', {
+    position: "top-right",
+    hideProgressBar: false,
+    closeOnClick: true,
+    pauseOnHover: true,
+    draggable: true,
+    theme: 'dark',
+    onClose: () => navigate('/login')
+  });
+};
 
   const togglePasswordVisibilty = () => {
     setShowPassword(!showPassword);
@@ -119,7 +127,7 @@ const SignUp = () => {
             </div>
             <h1 className={signupStyles.signupCard.title}>Join PremiumDrive</h1>
             <p className={signupStyles.signupCard.subtitle}>
-              Create your exclusive accountt
+              Create your exclusive account
             </p>
           </div>
 
