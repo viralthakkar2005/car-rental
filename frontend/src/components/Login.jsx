@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react'
 import { loginStyles } from '../assets/dummyStyles'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { FaArrowLeft, FaLock, FaUser, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { toast, ToastContainer } from 'react-toastify';
 import logo from '../assets/logocar.png'
+import axios from 'axios';
 
 const Login = () => {
 
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [credentials, setCredentails] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [loading,setLoading]=useState(false);
 
   useEffect(() => {
     setIsActive(true);
@@ -23,12 +24,28 @@ const Login = () => {
     setCredentails((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async(e) => {
     e.preventDefault();
+    setLoading(true);
+    try{
+    const base = 'http://localhost:5000';
+      const url = `${base}/api/auth/login`;
+
+      const res = await axios.post(url, credentials , {
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (res.status >= 200 && res.status < 300) {
+        const { token, user,message } = res.data || {};
+
+        if (token) localStorage.setItem('token', token);
+        if (user) localStorage.setItem('user', JSON.stringify(user));
+
+
     console.log("Login details", credentials);
     localStorage.setItem("authToken", "your-authentication-token-here");
 
-    toast.success('Login Successful! Welcome back', {
+    toast.success(message || 'Login Successful! Welcome back', {
       position: 'top-right',
       hideProgressBar: false,
       closeOnClick: true,
@@ -36,10 +53,38 @@ const Login = () => {
       draggable: true,
       theme: 'colored',
       onClose: () => {
-        const redirectPath = location.state?.from || '/';
+        const redirectPath = "/";
         navigate(redirectPath, { replace: true });
-      }
+      },
+      autoClose:1000,
     });
+  }
+  else{
+    toast.error('Unexpected server response during registration', {
+            theme: 'dark'
+          });
+  }
+    }
+  
+    catch (err) {
+      console.error("Login error (frontend):", err);
+      if (err.response) {
+        const serverMessage =
+          err.response.data?.message ||
+          err.response.data?.error ||
+          `Server error: ${err.response.status}`;
+        toast.error(serverMessage, { theme: "colored" });
+      } else if (err.request) {
+        toast.error("No response from server — is backend running?", {
+          theme: "colored",
+        });
+      } else {
+        toast.error(err.message || "Login failed", { theme: "colored" });
+      }
+    }
+    finally{
+      setLoading(false);
+    }
   };
 
   const togglePasswordVisibilty = () => setShowPassword((prev) => !prev)
@@ -53,10 +98,10 @@ const Login = () => {
         <div className={`${loginStyles.animatedBackground.orb3} ${isActive ? '-translate-x-10 translate-y-20' : ''}`} />
       </div>
 
-      <a href="/" className={loginStyles.backButton}>
+      <Link to="/" className={loginStyles.backButton}>
         <FaArrowLeft className=" text-sm sm:text-base" />
         <span className=" font-medium text-xs sm:text-sm">Back to Home</span>
-      </a>
+      </Link>
 
       {/* LOGIN CARD */}
       <div
@@ -132,9 +177,9 @@ const Login = () => {
               </div>
             </div>
 
-            <button type="submit" className={loginStyles.form.submitButton}>
+            <button type="submit" disabled={loading} className={loginStyles.form.submitButton}>
               <span className={loginStyles.form.buttonText}>
-                ACCESS PREMIUM GARAGE
+                {loading ? 'Signin in...' : 'ACCESS premimum GARADGE' }
               </span>
               <div className={loginStyles.form.buttonHover} />
             </button>
@@ -142,9 +187,9 @@ const Login = () => {
 
           <div className={loginStyles.signupSection}>
             <p className={loginStyles.signupText}>Don't have an account?</p>
-            <a href="/signup" className={loginStyles.signupButton}>
+            <Link to="/signup" className={loginStyles.signupButton}>
              CREATE ACCOUNT
-            </a>
+            </Link>
           </div>
         </div>
       </div>

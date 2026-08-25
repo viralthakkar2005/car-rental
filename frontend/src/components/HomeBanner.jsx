@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import img1 from "../assets/hero.png";
 import { heroStyles as styles } from "../assets/dummyStyles";
+import { Link } from "react-router-dom";
 
 export default function HomeBanner() {
   const wrapRef = useRef(null);
@@ -143,11 +144,11 @@ export default function HomeBanner() {
       </p>
     </div>
 
-    <a href="/cars" className="flex items-center gap-3">
+    <Link to="/cars" className="flex items-center gap-3">
       <button className={styles.ctaButton}>
         <span className={styles.buttonText}>See Fleet</span>
       </button>
-    </a>
+    </Link>
 
     <span aria-hidden className={styles.outline}/>
   </div>

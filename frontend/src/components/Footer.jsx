@@ -62,15 +62,15 @@ const Footer = () => {
             <ul className={styles.linkList}>
               {['Home', 'Cars', 'Contact Us'].map((link, i) => (
                 <li key={i}>
-                  <a
-                    href={link === 'Home'
+                  <Link
+                    to={link === 'Home'
                       ? '/'
                       : link === 'Contact Us'
                         ? '/contact'
                         : '/cars'} className={styles.linkItem}>
                     <span className={styles.bullet}></span>
                     {link}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -137,7 +137,7 @@ const Footer = () => {
 
               {/* Bottom Copyright */}
         <div className={styles.copyright}>
-          <p>&copy; {new Date().getFullYear} KARZONE. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} KARZONE. All rights reserved.</p>
           <p className="mt-3 md:mt-0">
             Designed by{" "}
             <a

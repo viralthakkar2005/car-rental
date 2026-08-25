@@ -3,6 +3,7 @@ import { testimonialStyles as styles } from "../assets/dummyStyles";
 import testimonials from "../assets/Testimonialdata";
 import { FaCar, FaQuoteLeft, FaStar } from "react-icons/fa";
 import { GiSteeringWheel } from "react-icons/gi";
+import { Link } from "react-router-dom";
 
 const Testimonial = () => {
   return (
@@ -35,7 +36,6 @@ const Testimonial = () => {
           {/* TESTIMONAILS CARD */}
           <div className={styles.grid}>
             {testimonials.map((t, index) => {
-              const shape = styles.cardShapes[index % styles.cardShapes.length];
               const IconComponent = styles.icons[index % styles.icons.length];
 
               return (
@@ -142,9 +142,9 @@ const Testimonial = () => {
             Join thousands of satisfied customers who have experienced our
             premium fleet and exceptional services.
           </p>
-          <a href="/cars" className={styles.ctaButton}>
+          <Link to="/cars" className={styles.ctaButton}>
             Book Your Luxury Ride
-          </a>
+          </Link>
         </div>
       </div>
 
