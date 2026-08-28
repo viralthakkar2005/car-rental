@@ -126,194 +126,30 @@ const CarS = () => {
     return `${n} ${pluralForm ?? singular + "s"}`;
   };
 
-  // Compute canonical availability:
-  // - prefer car.bookings (if present): find any booking that covers today -> booked until booking.return
-  // - otherwise fallback to car.availability provided by backend
-  const computeEffectiveAvailability = (car) => {
-    const today = new Date();
-
-    if (Array.isArray(car.bookings) && car.bookings.length) {
-      const overlapping = car.bookings
-        .map((b) => {
-          const pickup = b.pickupDate ?? b.startDate ?? b.start ?? b.from;
-          const ret = b.returnDate ?? b.endDate ?? b.end ?? b.to;
-          if (!pickup || !ret) return null;
-          return { pickup: new Date(pickup), return: new Date(ret), raw: b };
-        })
-        .filter(Boolean)
-        .filter(
-          (b) =>
-            startOfDay(b.pickup) <= startOfDay(today) &&
-            startOfDay(today) <= startOfDay(b.return)
-        );
-
-      if (overlapping.length > 0) {
-        overlapping.sort((a, b) => b.return - a.return);
-        return {
-          state: "booked",
-          until: overlapping[0].return.toISOString(),
-          source: "bookings",
-        };
-      }
-    }
-
-    if (car.availability) {
-      if (car.availability.state === "booked" && car.availability.until) {
-        return {
-          state: "booked",
-          until: car.availability.until,
-          source: "availability",
-        };
-      }
-
-      if (
-        car.availability.state === "available_until_reservation" &&
-        Number(car.availability.daysAvailable ?? -1) === 0
-      ) {
-        // reservation starts today -> treat as booked
-        return {
-          state: "booked",
-          until: car.availability.until ?? null,
-          source: "availability-res-starts-today",
-          nextBookingStarts: car.availability.nextBookingStarts,
-        };
-      }
-
-      return { ...car.availability, source: "availability" };
-    }
-
-    return { state: "fully_available", source: "none" };
-  };
-
-  // Given an 'until' ISO date, compute day-after available date + daysUntilAvailable
-  const computeAvailableMeta = (untilIso) => {
-    if (!untilIso) return null;
-    try {
-      const until = new Date(untilIso);
-      const available = new Date(until);
-      available.setDate(available.getDate() + 1);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const daysUntilAvailable = daysBetween(today, available);
-      return { availableIso: available.toISOString(), daysUntilAvailable };
-    } catch {
-      return null;
-    }
-  };
-
-  // Render availability badge — prefer showing concrete available date when booked
-  const renderAvailabilityBadge = (rawAvailability, car) => {
-    const effective = computeEffectiveAvailability(car);
-
-    if (!effective) {
-      return (
-        <span className="px-2 py-1 text-xs rounded-md bg-green-50 text-green-700">
-          Available
-        </span>
-      );
-    }
-
-    if (effective.state === "booked") {
-      if (effective.until) {
-        const meta = computeAvailableMeta(effective.until);
-        if (meta && meta.availableIso) {
-          return (
-            <div className="flex flex-col items-end">
-              <span className="px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 font-semibold">
-                Booked — available on {formatDate(meta.availableIso)}
-              </span>
-              <small className="text-xs text-gray-400 mt-1">
-                until {formatDate(effective.until)}
-              </small>
-            </div>
-          );
-        }
-        return (
-          <div className="flex flex-col items-end">
-            <span className="px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 font-semibold">
-              Booked
-            </span>
-            <small className="text-xs text-gray-400 mt-1">
-              until {formatDate(effective.until)}
-            </small>
-          </div>
-        );
-      }
-      // booked but no until info
-      return (
-        <div className="flex flex-col items-end">
-          <span className="px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 font-semibold">
-            Booked
-          </span>
-        </div>
-      );
-    }
-
-    if (effective.state === "available_until_reservation") {
-      const days = Number(effective.daysAvailable ?? -1);
-      if (!Number.isFinite(days) || days < 0) {
-        return (
-          <div className="flex flex-col items-end">
-            <span className="px-2 py-1 text-xs rounded-md bg-amber-50 text-amber-800 font-semibold">
-              Available
-            </span>
-            {effective.nextBookingStarts && (
-              <small className="text-xs text-gray-400 mt-1">
-                from {formatDate(effective.nextBookingStarts)}
-              </small>
-            )}
-          </div>
-        );
-      }
-      if (days === 0) {
-        return (
-          <div className="flex flex-col items-end">
-            <span className="px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 font-semibold">
-              Booked — starts today
-            </span>
-            {effective.nextBookingStarts && (
-              <small className="text-xs text-gray-400 mt-1">
-                from {formatDate(effective.nextBookingStarts)}
-              </small>
-            )}
-          </div>
-        );
-      }
-      return (
-        <div className="flex flex-col items-end">
-          <span className="px-2 py-1 text-xs rounded-md bg-amber-50 text-amber-800 font-semibold">
-            Available — reserved in {plural(days, "day")}
-          </span>
-          {effective.nextBookingStarts && (
-            <small className="text-xs text-gray-400 mt-1">
-              from {formatDate(effective.nextBookingStarts)}
-            </small>
-          )}
-        </div>
-      );
-    }
-
-    // fully_available or fallback
-    return (
-      <span className="px-2 py-1 text-xs rounded-md bg-green-50 text-green-700">
-        Available
-      </span>
-    );
-  };
-
   const isBookDisabled = (car) => {
-    const effective = computeEffectiveAvailability(car);
-    if (car?.status && car.status !== "available") return true;
-    if (!effective) return false;
-    return effective.state === "booked";
+    // Availability is no longer computed against "today" here — the physical
+    // rental business can have cars booked outside this website (walk-ins,
+    // phone bookings) that this data has no way of knowing about, so a
+    // "booked/available" badge based only on our own records was actively
+    // misleading. Every car can be requested for any dates; the backend
+    // still blocks two *online* bookings from overlapping (see
+    // createBooking), and the admin does the real physical-availability
+    // check before approving.
+    return car?.status && car.status !== "available";
   };
 
-  const handleBook = (car, id) => {
-    const disabled = isBookDisabled(car);
-    if (disabled) return;
-    navigate(`/cars/${id}`, { state: { car } });
-  };
+const BOOKING_POLICY_MSG =
+  "Booking Policy:\n\n" +
+  "• Once payment is completed, the amount is non-refundable if the booking is cancelled.\n" +
+  "• The car and travel dates cannot be changed after booking — only your personal details (name, phone, address) can be updated later.\n\n" +
+  "Do you want to continue with this booking?";
 
+const handleBook = (car, id) => {
+  const disabled = isBookDisabled(car);
+  if (disabled) return;
+  if (!window.confirm(BOOKING_POLICY_MSG)) return;
+  navigate(`/cars/${id}`, { state: { car } });
+};
   return (
     <div className={carPageStyles.pageContainer}>
       {/* Main Content */}
@@ -382,11 +218,6 @@ const CarS = () => {
                       className={carPageStyles.carImage}
                     />
 
-                    {/* availability badge at top-right of card */}
-                    <div className="absolute right-4 top-4 z-20">
-                      {renderAvailabilityBadge(car.availability, car)}
-                    </div>
-
                     <div className={carPageStyles.priceBadge}>
                       ₹{car.dailyRate ?? car.price ?? car.pricePerDay ?? "—"}
                       /day
@@ -441,7 +272,7 @@ const CarS = () => {
                       aria-label={`Book ${carName}`}
                       title={
                         disabled
-                          ? "This car is currently booked or unavailable"
+                          ? "This car is currently unavailable"
                           : `Book ${carName}`
                       }
                       disabled={disabled}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
-import axios from 'axios'
 import { BookingPageStyles, statusConfig } from '../assets/dummyStyles'
+import api, { BASE_URL as baseURL } from '../utils/api'
 import {
   FaChevronDown,
   FaEdit,
@@ -22,9 +22,6 @@ import {
   FaFilter,
   FaSync,
 } from 'react-icons/fa'
-
-const baseURL = "http://localhost:5000";
-const api = axios.create({ baseURL, headers: { Accept: 'application/json' } });
 
 // Utility functions
 const formatDate = (s) => {
@@ -185,7 +182,9 @@ const BookingCardActions = ({
   onSaveStatus,
   onCancelEdit,
   onToggleDetails,
-  isExpanded
+  isExpanded,
+  paymentStatus,
+  onTogglePayment,
 }) => (
   <div className={BookingPageStyles.bookingActions}>
     <div className=' items-center text-orange-400 hidden md:flex'>
@@ -199,7 +198,21 @@ const BookingCardActions = ({
       </span>
     </div>
 
-    <div className=' flex space-x-3 ml-auto'>
+    <div className=' flex space-x-3 ml-auto items-center'>
+      {onTogglePayment && (
+        <button
+          onClick={onTogglePayment}
+          title="Toggle payment status"
+          className={
+            paymentStatus === 'paid'
+              ? 'flex items-center gap-1 text-sm px-3 py-1 rounded-lg bg-green-700/30 text-green-300 hover:text-white transition-colors'
+              : 'flex items-center gap-1 text-sm px-3 py-1 rounded-lg bg-yellow-700/30 text-yellow-300 hover:text-white transition-colors'
+          }
+        >
+          <FaCreditCard />
+          {paymentStatus === 'paid' ? 'Paid' : 'Mark Paid'}
+        </button>
+      )}
       {isEditing ? (
         <>
           <button
@@ -260,6 +273,22 @@ const BookingCardDetails = ({ booking }) => (
           icon={<FaCreditCard />}
           label="Total Amount"
           value={`$${booking.amount}`}
+        />
+      </Panel>
+
+      <Panel
+        title="Location Details"
+        icon={<FaMapMarkerAlt className={BookingPageStyles.panelIcon} />}
+      >
+        <Detail
+          icon={<FaMapMarkerAlt />}
+          label="Pickup Location"
+          value={booking.pickupLocation}
+        />
+        <Detail
+          icon={<FaMapMarkerAlt />}
+          label="Drop-off Location"
+          value={booking.dropLocation}
         />
       </Panel>
 
@@ -340,6 +369,7 @@ const BookingCard = ({
   onStatusChange,
   onSaveStatus,
   onCancelEdit,
+  onTogglePayment,
 }) => (
   <div className={BookingPageStyles.bookingCard}>
     <div className=" p-5 cursor-pointer" onClick={onToggleDetails}>
@@ -365,6 +395,8 @@ const BookingCard = ({
         onCancelEdit={onCancelEdit}
         onToggleDetails={onToggleDetails}
         isExpanded={isExpanded}
+        paymentStatus={booking.paymentStatus}
+        onTogglePayment={onTogglePayment}
       />
     </div>
     {isExpanded && <BookingCardDetails booking={booking} />}
@@ -503,8 +535,11 @@ const Booking = () => {
           carImage: carInfo.image || "",
           pickupDate: b.pickupDate || b.pickup || b.startDate || "",
           returnDate: b.returnDate || b.return || b.endDate || "",
+          pickupLocation: b.pickupLocation || "",
+          dropLocation: b.dropLocation || "",
           bookingDate: b.bookingDate || b.createdAt || "",
           status: (b.status || "pending").toString(),
+          paymentStatus: (b.paymentStatus || "pending").toString(),
           amount: b.amount ?? b.total ?? 0,
           details,
           address: {
@@ -558,7 +593,7 @@ const Booking = () => {
         window.alert("Please select a status before saving.");
         return;
       }
-      await api.patch(`/api/bookings/${booking._id}/status`, {
+      await api.patch(`/api/bookings/${booking._id}/admin-status`, {
         status: newStatus,
       });
 
@@ -578,6 +613,31 @@ const Booking = () => {
       console.error('Failed to update status:', err);
       window.alert(
         err.response?.data?.message || 'Failed to update booking status '
+      );
+    }
+  };
+
+  // Admin marking a booking as paid/pending manually (e.g. cash payments,
+  // or correcting a Stripe webhook that didn't land).
+  const togglePayment = async (id) => {
+    try {
+      const booking = bookings.find((b) => b.id === id || b._id === id);
+      if (!booking || !booking._id) return;
+
+      const nextStatus = booking.paymentStatus === "paid" ? "pending" : "paid";
+      await api.patch(`/api/bookings/${booking._id}/payment`, {
+        paymentStatus: nextStatus,
+      });
+
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === id ? { ...b, paymentStatus: nextStatus } : b
+        )
+      );
+    } catch (err) {
+      console.error("Failed to update payment status:", err);
+      window.alert(
+        err.response?.data?.message || "Failed to update payment status"
       );
     }
   };
@@ -631,6 +691,10 @@ const Booking = () => {
             onCancelEdit={(e) => {
               e.stopPropagation();
               handleCancelEdit();
+            }}
+            onTogglePayment={(e) => {
+              e.stopPropagation();
+              togglePayment(booking.id);
             }}
           />
         ))}

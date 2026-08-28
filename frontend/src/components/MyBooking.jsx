@@ -20,9 +20,10 @@ import {
   FaUser,
   FaCreditCard,
   FaReceipt,
-  FaArrowRight,
+  FaEdit,
+  FaHourglassHalf,
 } from "react-icons/fa";
-import { myBookingsStyles as s } from "../../assets/dummyStyles";
+import { myBookingsStyles as s } from "../assets/dummyStyles";
 
 const API_BASE = "http://localhost:5000";
 const TIMEOUT = 15000;
@@ -106,6 +107,12 @@ const normalizeBooking = (booking) => {
     booking.return ||
     null;
 
+  const rawStatus =
+    booking.status ||
+    (booking.paymentStatus === "paid" ? "active" : "") ||
+    (booking.paymentStatus === "pending" ? "pending" : "") ||
+    "pending";
+
   const normalized = {
     id: booking._id || booking.id || String(Math.random()).slice(2, 8),
     car: {
@@ -138,14 +145,17 @@ const normalizeBooking = (booking) => {
           : safeAccess(() => booking.user?.address) || "",
     },
     dates: { pickup: pickupDate, return: returnDate },
+    pickupLocation: booking.pickupLocation || "",
+    dropLocation: booking.dropLocation || "",
     location:
       address.city || booking.location || carObj.location || "Pickup location",
     price: Number(booking.amount || booking.price || booking.total || 0),
-    status:
-      booking.status ||
-      (booking.paymentStatus === "paid" ? "active" : "") ||
-      (booking.paymentStatus === "pending" ? "pending" : "") ||
-      "pending",
+    // rawStatus is the true server-side workflow state (pending / approved /
+    // rejected / active / completed / cancelled) — used to decide whether
+    // payment is currently possible.
+    rawStatus,
+    status: rawStatus,
+    paymentStatus: booking.paymentStatus || "pending",
     bookingDate:
       booking.bookingDate ||
       booking.createdAt ||
@@ -157,15 +167,19 @@ const normalizeBooking = (booking) => {
     raw: booking,
   };
 
-  // derive completed/upcoming from return date
+  // Only re-derive upcoming/completed for bookings that are already paid and
+  // underway — a paid-off booking that's already passed its return date is
+  // "completed", one still ahead is "upcoming". Anything still pending
+  // admin review, or approved-but-unpaid, keeps its real status so the
+  // payment gate below reads correctly.
   try {
     const now = new Date();
     const _return = new Date(normalized.dates.return);
-    if (normalized.status === "active" || normalized.status === "pending") {
+    if (normalized.status === "active") {
       normalized.status = _return > now ? "upcoming" : "completed";
     }
   } catch {
-    normalized.status = normalized.status || "upcoming";
+    // leave status as-is
   }
 
   return normalized;
@@ -190,6 +204,21 @@ const StatusBadge = ({ status }) => {
       icon: <FaCheckCircle />,
     },
     upcoming: { text: "Upcoming", color: "bg-blue-500", icon: <FaClock /> },
+    pending: {
+      text: "Awaiting Review",
+      color: "bg-amber-500",
+      icon: <FaHourglassHalf />,
+    },
+    approved: {
+      text: "Approved — Pay Now",
+      color: "bg-sky-500",
+      icon: <FaCheckCircle />,
+    },
+    rejected: {
+      text: "Rejected",
+      color: "bg-red-500",
+      icon: <FaTimesCircle />,
+    },
     cancelled: {
       text: "Cancelled",
       color: "bg-red-500",
@@ -208,7 +237,18 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const BookingCard = ({ booking, onViewDetails }) => {
+const PaymentBadge = ({ paymentStatus }) => (
+  <div
+    className={`${
+      paymentStatus === "paid" ? "bg-green-700/30 text-green-300" : "bg-yellow-700/30 text-yellow-300"
+    } px-3 py-1 rounded-full inline-flex items-center gap-2 text-sm`}
+  >
+    <FaCreditCard />
+    <span>{paymentStatus === "paid" ? "Payment Completed" : "Payment Pending"}</span>
+  </div>
+);
+
+const BookingCard = ({ booking, onViewDetails, onEdit }) => {
   const days = daysBetween(booking.dates.pickup, booking.dates.return);
   return (
     <div className={s.bookingCard}>
@@ -236,7 +276,10 @@ const BookingCard = ({ booking, onViewDetails }) => {
           </div>
         </div>
 
-        <StatusBadge status={booking.status} />
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge status={booking.status} />
+          <PaymentBadge paymentStatus={booking.paymentStatus} />
+        </div>
 
         <div className={s.detailSection}>
           <div className={s.detailItem}>
@@ -258,7 +301,17 @@ const BookingCard = ({ booking, onViewDetails }) => {
             </div>
             <div>
               <p className={s.detailLabel}>Pickup Location</p>
-              <p className={s.detailValue}>{booking.location}</p>
+              <p className={s.detailValue}>{booking.pickupLocation || "-"}</p>
+            </div>
+          </div>
+
+          <div className={s.detailItem}>
+            <div className={s.detailIcon}>
+              <FaMapMarkerAlt />
+            </div>
+            <div>
+              <p className={s.detailLabel}>Drop-off Location</p>
+              <p className={s.detailValue}>{booking.dropLocation || "-"}</p>
             </div>
           </div>
         </div>
@@ -271,19 +324,27 @@ const BookingCard = ({ booking, onViewDetails }) => {
           >
             <FaReceipt /> View Details
           </button>
-          <Link to="/cars" className={s.bookAgainButton}>
-            <FaCar />
-            {booking.status === "upcoming" ? "Modify" : "Book Again"}
-          </Link>
+          <button
+            type="button"
+            onClick={() => onEdit(booking)}
+            className={s.bookAgainButton}
+          >
+            <FaEdit />
+            Edit
+          </button>
         </div>
       </div>
     </div>
   );
 };
 
-const BookingModal = ({ booking, onClose, onCancel }) => {
+const BookingModal = ({ booking, onClose, onCancel, onPay, paying }) => {
   const days = daysBetween(booking.dates.pickup, booking.dates.return);
   const pricePerDay = days > 0 ? booking.price / days : booking.price;
+
+  const canCancel =
+    booking.paymentStatus !== "paid" &&
+    !["rejected", "cancelled", "completed"].includes(booking.status);
 
   return (
     <div className={s.modalOverlay}>
@@ -294,7 +355,7 @@ const BookingModal = ({ booking, onClose, onCancel }) => {
               <FaReceipt className="text-orange-400" /> Booking Details
             </h2>
             <div className="flex items-center gap-2">
-              {booking.status === "upcoming" && (
+              {canCancel && (
                 <button
                   type="button"
                   onClick={() => onCancel(booking.id)}
@@ -380,8 +441,14 @@ const BookingModal = ({ booking, onClose, onCancel }) => {
                 <FaMapMarkerAlt className="text-orange-400" /> Location Details
               </h3>
               <div className={s.infoCard}>
-                <p className={s.infoLabel}>Pickup Location:</p>
-                <p className={s.infoValue}>{booking.location}</p>
+                <div className={s.infoRow}>
+                  <p className={s.infoLabel}>Pickup Location:</p>
+                  <p className={s.infoValue}>{booking.pickupLocation || "-"}</p>
+                </div>
+                <div className={s.infoRow}>
+                  <p className={s.infoLabel}>Drop-off Location:</p>
+                  <p className={s.infoValue}>{booking.dropLocation || "-"}</p>
+                </div>
               </div>
             </div>
 
@@ -432,7 +499,10 @@ const BookingModal = ({ booking, onClose, onCancel }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className={s.infoLabel}>Booking Status:</p>
-                <StatusBadge status={booking.status} />
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <StatusBadge status={booking.status} />
+                  <PaymentBadge paymentStatus={booking.paymentStatus} />
+                </div>
               </div>
               <div>
                 <p className={s.infoLabel}>Booking Date:</p>
@@ -445,10 +515,174 @@ const BookingModal = ({ booking, onClose, onCancel }) => {
             <button type="button" onClick={onClose} className={s.closeButton}>
               Close
             </button>
-            <Link to="/cars" onClick={onClose} className={s.modalBookButton}>
-              Book Again <FaArrowRight className="text-sm" />
-            </Link>
+
+            {booking.paymentStatus === "paid" ? (
+              <button
+                type="button"
+                disabled
+                className="flex-1 py-3 px-4 bg-green-800/60 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed opacity-90"
+              >
+                <FaCheckCircle className="text-sm" /> Payment Completed
+              </button>
+            ) : booking.status === "approved" ? (
+              <button
+                type="button"
+                onClick={() => onPay(booking.id)}
+                disabled={paying}
+                className={s.modalBookButton}
+              >
+                <FaCreditCard className="text-sm" />
+                {paying ? "Redirecting..." : "Pay Now"}
+              </button>
+            ) : booking.status === "rejected" ? (
+              <button
+                type="button"
+                disabled
+                className="flex-1 py-3 px-4 bg-red-900/50 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
+              >
+                <FaTimesCircle className="text-sm" /> Booking Rejected
+              </button>
+            ) : booking.status === "cancelled" ? (
+              <button
+                type="button"
+                disabled
+                className="flex-1 py-3 px-4 bg-gray-700 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed opacity-70"
+              >
+                Cancelled
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="flex-1 py-3 px-4 bg-gray-700 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed opacity-70"
+              >
+                <FaHourglassHalf className="text-sm" /> Awaiting Admin Approval
+              </button>
+            )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EditDetailsModal = ({ booking, onClose, onSave }) => {
+  const [form, setForm] = useState({
+    customer: booking.user.name || "",
+    email: booking.user.email || "",
+    phone: booking.user.phone || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.customer.trim() || !form.email.trim()) {
+      setErr("Name and email are required.");
+      return;
+    }
+    setErr("");
+    setSaving(true);
+    try {
+      await onSave(booking.id, form);
+      onClose();
+    } catch (error) {
+      setErr(
+        error.response?.data?.message || error.message || "Failed to update details"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className={s.modalOverlay}>
+      <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border border-gray-700 max-w-md w-full">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <FaUser className="text-orange-400" /> Edit Personal Details
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className={s.modalCloseButton}
+            >
+              <FaTimes />
+            </button>
+          </div>
+
+          <p className="text-sm text-gray-400 mb-4">
+            Car and travel dates can't be changed here — only your name, email,
+            and phone number.
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                name="customer"
+                value={form.customer}
+                onChange={handleChange}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={form.phone}
+                onChange={handleChange}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            {err && <p className="text-red-400 text-sm">{err}</p>}
+
+            <div className="flex gap-4 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className={s.closeButton}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className={s.modalBookButton}
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -470,9 +704,21 @@ const MyBookings = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState(null);
+  const [payingId, setPayingId] = useState(null);
+
+  const [editingBooking, setEditingBooking] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const isMounted = useRef(true);
   useEffect(() => () => (isMounted.current = false), []);
+
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+  };
 
   const fetchBookings = useCallback(async () => {
     setError(null);
@@ -482,14 +728,8 @@ const MyBookings = () => {
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
 
     try {
-      const token = localStorage.getItem("token");
-      const headers = {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-      };
-
       const response = await axios.get(`${API_BASE}/api/bookings/mybooking`, {
-        headers,
+        headers: authHeaders(),
         signal: controller.signal,
       });
 
@@ -535,15 +775,10 @@ const MyBookings = () => {
       if (!window.confirm("Are you sure you want to cancel this booking?"))
         return;
       try {
-        const token = localStorage.getItem("token");
-        const headers = {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        };
         const response = await axios.patch(
           `${API_BASE}/api/bookings/${bookingId}/status`,
           { status: "cancelled" },
-          { headers }
+          { headers: authHeaders() }
         );
 
         const updated = normalizeBooking(
@@ -565,6 +800,47 @@ const MyBookings = () => {
     [selectedBooking]
   );
 
+  const saveBookingDetails = useCallback(async (bookingId, form) => {
+    const response = await axios.patch(
+      `${API_BASE}/api/bookings/${bookingId}/details`,
+      form,
+      { headers: authHeaders() }
+    );
+    const updated = normalizeBooking(response.data);
+    setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
+    setSelectedBooking((prev) =>
+      prev && prev.id === bookingId ? updated : prev
+    );
+  }, []);
+
+  // Starts Stripe checkout for a booking the admin has already approved.
+  // The backend re-checks status==='approved' and paymentStatus!=='paid'
+  // itself, so this is UX-only gating, not the real enforcement.
+  const payForBooking = useCallback(async (bookingId) => {
+    setPayingId(bookingId);
+    try {
+      const res = await axios.post(
+        `${API_BASE}/api/payments/create-checkout-session/${bookingId}`,
+        {},
+        { headers: authHeaders() }
+      );
+      if (res?.data?.url) {
+        window.location.href = res.data.url;
+        return;
+      }
+      alert("Could not start payment — no checkout URL returned.");
+    } catch (err) {
+      alert(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to start payment"
+      );
+    } finally {
+      setPayingId(null);
+    }
+  }, []);
+
   const filteredBookings = useMemo(
     () =>
       filter === "all" ? bookings : bookings.filter((b) => b.status === filter),
@@ -573,6 +849,8 @@ const MyBookings = () => {
 
   const filterButtons = [
     { key: "all", label: "All Bookings", icon: <FaFilter /> },
+    { key: "pending", label: "Awaiting Review", icon: <FaHourglassHalf /> },
+    { key: "approved", label: "Approved", icon: <FaCheckCircle /> },
     { key: "upcoming", label: "Upcoming", icon: <FaClock /> },
     { key: "completed", label: "Completed", icon: <FaCheckCircle /> },
     { key: "cancelled", label: "Cancelled", icon: <FaTimes /> },
@@ -585,6 +863,15 @@ const MyBookings = () => {
   const closeModal = () => {
     setSelectedBooking(null);
     setShowModal(false);
+  };
+
+  const openEdit = (b) => {
+    setEditingBooking(b);
+    setShowEditModal(true);
+  };
+  const closeEdit = () => {
+    setEditingBooking(null);
+    setShowEditModal(false);
   };
 
   return (
@@ -653,6 +940,7 @@ const MyBookings = () => {
                 key={booking.id}
                 booking={booking}
                 onViewDetails={openDetails}
+                onEdit={openEdit}
               />
             ))}
           </div>
@@ -665,13 +953,13 @@ const MyBookings = () => {
             color="text-orange-400"
           />
           <StatsCard
-            value={bookings.filter((b) => b.status === "completed").length}
-            label="Completed Trips"
+            value={bookings.filter((b) => b.paymentStatus === "paid").length}
+            label="Paid Bookings"
             color="text-green-400"
           />
           <StatsCard
-            value={bookings.filter((b) => b.status === "upcoming").length}
-            label="Upcoming Trips"
+            value={bookings.filter((b) => b.status === "approved").length}
+            label="Awaiting Payment"
             color="text-blue-400"
           />
         </div>
@@ -682,6 +970,16 @@ const MyBookings = () => {
           booking={selectedBooking}
           onClose={closeModal}
           onCancel={cancelBooking}
+          onPay={payForBooking}
+          paying={payingId === selectedBooking.id}
+        />
+      )}
+
+      {showEditModal && editingBooking && (
+        <EditDetailsModal
+          booking={editingBooking}
+          onClose={closeEdit}
+          onSave={saveBookingDetails}
         />
       )}
     </div>

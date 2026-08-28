@@ -1,9 +1,13 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/userModel.js';
 
-const JWT_SECRET = "viral"; // ✅ now shares the same secret as userController.js
-
 export default async function authMiddleware(req, res, next) {
+  const JWT_SECRET = process.env.JWT_SECRET; // read at call time, not at module load time
+  if (!JWT_SECRET) {
+    console.error('JWT_SECRET is not set in the environment');
+    return res.status(500).json({ success: false, message: 'Server misconfigured' });
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

@@ -10,7 +10,6 @@ import {
   FaEnvelope,
   FaUser,
   FaArrowLeft,
-  FaCreditCard,
   FaMapMarkerAlt,
   FaCity,
   FaGlobeAsia,
@@ -21,6 +20,7 @@ import "react-toastify/dist/ReactToastify.css";
 import axios from "axios";
 import carsData from "../assets/carsData";
 import { carDetailStyles } from "../assets/dummyStyles";
+import { LOCATIONS } from "../assets/locations";
 
 const API_BASE = "http://localhost:5000";
 const api = axios.create({
@@ -79,6 +79,7 @@ const CarDetailPage = () => {
     pickupDate: "",
     returnDate: "",
     pickupLocation: "",
+    dropLocation: "",
     name: "",
     email: "",
     phone: "",
@@ -174,6 +175,10 @@ const CarDetailPage = () => {
       toast.error("Return date must be the same or after pickup date.");
       return;
     }
+    if (!formData.pickupLocation || !formData.dropLocation) {
+      toast.error("Please select a pickup and drop-off location.");
+      return;
+    }
 
     setSubmitting(true);
     if (submitControllerRef.current) {
@@ -199,8 +204,9 @@ const CarDetailPage = () => {
         },
         pickupDate: formData.pickupDate,
         returnDate: formData.returnDate,
+        pickupLocation: formData.pickupLocation,
+        dropLocation: formData.dropLocation,
         amount: calculateTotal(),
-        details: { pickupLocation: formData.pickupLocation },
         address: {
           city: formData.city,
           state: formData.state,
@@ -213,32 +219,23 @@ const CarDetailPage = () => {
       const headers = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      const res = await api.post(
-        `/api/payments/create-checkout-session`,
-        payload,
-        {
-          headers,
-          signal: controller.signal,
-        }
-      );
-
-      if (res?.data?.url) {
-        toast.success("Redirecting to payment...", {
-          position: "top-right",
-          autoClose: 1200,
-        });
-        window.location.href = res.data.url;
-        return;
-      }
+      // No payment happens here. This just files a booking request — the
+      // admin confirms the car is physically available before payment ever
+      // becomes possible.
+      await api.post(`/api/bookings`, payload, {
+        headers,
+        signal: controller.signal,
+      });
 
       toast.success(
-        "Booking created. Please complete payment from bookings page.",
-        { position: "top-right", autoClose: 2000 }
+        "Booking request submitted! We'll notify you once it's approved so you can pay.",
+        { position: "top-right", autoClose: 2500 }
       );
       setFormData({
         pickupDate: "",
         returnDate: "",
         pickupLocation: "",
+        dropLocation: "",
         name: "",
         email: "",
         phone: "",
@@ -474,29 +471,71 @@ const CarDetailPage = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-col">
-                  <label className={carDetailStyles.formLabel}>
-                    Pickup Location
-                  </label>
-                  <div
-                    className={carDetailStyles.inputContainer(
-                      activeField === "pickupLocation"
-                    )}
-                  >
-                    <div className={carDetailStyles.inputIcon}>
-                      <FaMapMarkerAlt />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col">
+                    <label className={carDetailStyles.formLabel}>
+                      Pickup Location
+                    </label>
+                    <div
+                      className={carDetailStyles.inputContainer(
+                        activeField === "pickupLocation"
+                      )}
+                    >
+                      <div className={carDetailStyles.inputIcon}>
+                        <FaMapMarkerAlt />
+                      </div>
+                      <select
+                        name="pickupLocation"
+                        value={formData.pickupLocation}
+                        onChange={handleInputChange}
+                        onFocus={() => setActiveField("pickupLocation")}
+                        onBlur={() => setActiveField(null)}
+                        required
+                        className={carDetailStyles.textInputField}
+                      >
+                        <option value="" disabled>
+                          Select pickup location
+                        </option>
+                        {LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <input
-                      type="text"
-                      name="pickupLocation"
-                      placeholder="Enter pickup location"
-                      value={formData.pickupLocation}
-                      onChange={handleInputChange}
-                      onFocus={() => setActiveField("pickupLocation")}
-                      onBlur={() => setActiveField(null)}
-                      required
-                      className={carDetailStyles.textInputField}
-                    />
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className={carDetailStyles.formLabel}>
+                      Drop-off Location
+                    </label>
+                    <div
+                      className={carDetailStyles.inputContainer(
+                        activeField === "dropLocation"
+                      )}
+                    >
+                      <div className={carDetailStyles.inputIcon}>
+                        <FaMapMarkerAlt />
+                      </div>
+                      <select
+                        name="dropLocation"
+                        value={formData.dropLocation}
+                        onChange={handleInputChange}
+                        onFocus={() => setActiveField("dropLocation")}
+                        onBlur={() => setActiveField(null)}
+                        required
+                        className={carDetailStyles.textInputField}
+                      >
+                        <option value="" disabled>
+                          Select drop-off location
+                        </option>
+                        {LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -676,11 +715,15 @@ const CarDetailPage = () => {
                   disabled={submitting}
                   className={carDetailStyles.submitButton}
                 >
-                  <FaCreditCard className="mr-2 group-hover:scale-110 transition-transform" />
+                  <FaCheckCircle className="mr-2 group-hover:scale-110 transition-transform" />
                   <span>
-                    {submitting ? "Confirming..." : "Confirm Booking"}
+                    {submitting ? "Submitting..." : "Request Booking"}
                   </span>
                 </button>
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  This sends a booking request only — you'll pay once the
+                  admin confirms the car is available.
+                </p>
               </form>
             </div>
           </div>

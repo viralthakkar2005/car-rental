@@ -1,6 +1,6 @@
 import Car from "../models/carModel.js";
-import path from 'path'
-import fs, { stat } from 'fs'
+import cloudinary from '../config/cloudinary.js';
+import { uploadBufferToCloudinary } from '../middleware/uploads.js';
 
 export const createCar = async (req, res, next) => {
   try {
@@ -14,9 +14,12 @@ export const createCar = async (req, res, next) => {
         message: 'Make, model and dailyRate are required.'
       })
     }
-    let imageFilename = req.body.image || '';
+    let imageUrl = req.body.image || '';
+    let imagePublicId = '';
     if (req.file) {
-      imageFilename = req.file.filename
+      const result = await uploadBufferToCloudinary(req.file.buffer, req.file.originalname);
+      imageUrl = result.secure_url;
+      imagePublicId = result.public_id;
     }
 
     //saving to db
@@ -33,7 +36,8 @@ export const createCar = async (req, res, next) => {
       mileage: mileage ? Number(mileage) : 0,
       dailyRate: Number(dailyRate),
       status: status || 'available',
-      image: imageFilename || '',
+      image: imageUrl || '',
+      imagePublicId,
       description: description || ''
     });
 
@@ -113,18 +117,21 @@ export const updateCar = async (req, res, next) => {
     if (!car) return res.status(404).json({ message: 'Car not found' });
 
     if (req.file) {
-      if (car.image) {
-        const oldPath = path.join(process.cwd(), 'uploads', car.image);
-        fs.unlink(oldPath, (err) => { if (err) console.warn('Failed to delete old image:', err); });
+      if (car.imagePublicId) {
+        cloudinary.uploader.destroy(car.imagePublicId).catch((err) => console.warn('Failed to delete old image:', err));
       }
-      car.image = req.file.filename;
+      const result = await uploadBufferToCloudinary(req.file.buffer, req.file.originalname);
+      car.image = result.secure_url;
+      car.imagePublicId = result.public_id;
     }
 
     else if (req.body.image !== undefined) {
       if (!req.body.image && car.image) {
-        const oldPath = path.join(process.cwd(), 'uploads', car.image);
-        fs.unlink(oldPath, (err) => { if (err) console.warn('Failed to delete old image:', err); });
+        if (car.imagePublicId) {
+          cloudinary.uploader.destroy(car.imagePublicId).catch((err) => console.warn('Failed to delete old image:', err));
+        }
         car.image = '';
+        car.imagePublicId = '';
       }
     }
 
@@ -152,9 +159,8 @@ export const deleteCar = async (req, res, next) => {
     const car = await Car.findByIdAndDelete(req.params.id);
     if (!car) return res.status(404).json({ message: 'Car not found' });
 
-    if (car.image) {
-      const filePath = path.join(process.cwd(), 'uploads', car.image);
-      fs.unlink(filePath, (err) => { if (err) console.warn('Failed to delete image file:', err); });
+    if (car.imagePublicId) {
+      cloudinary.uploader.destroy(car.imagePublicId).catch((err) => console.warn('Failed to delete image:', err));
     }
 
     res.json({ message: 'Car deleted successfully!' })

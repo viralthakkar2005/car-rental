@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 const VerifyPaymentPage = () => {
 
   const [statusMsg, setStatusMsg] = useState('Verifying Payment...');
+  const [failed, setFailed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const search = location.search || '';
@@ -28,6 +29,7 @@ const VerifyPaymentPage = () => {
 
       if (!session_id) {
         setStatusMsg('No session id provided in the URL');
+        setFailed(true);
         return;
       }
 
@@ -35,10 +37,10 @@ const VerifyPaymentPage = () => {
         setStatusMsg('Confirming payment with server....');
 
         const API_BASE = 'http://localhost:5000';
-        const res = await axios.get(`${API_BASE}/api/payment/confirm`, {
+        const res = await axios.get(`${API_BASE}/api/payments/confirm`, {
           params: { session_id },
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-          timeout: 15000,
+          timeout: 20000,
         });
 
         if (cancelled) return;
@@ -50,6 +52,7 @@ const VerifyPaymentPage = () => {
         } else {
           const msg = res?.data?.message || "Payment not completed.";
           setStatusMsg(msg);
+          setFailed(true);
         }
       } catch (err) {
         console.error("Verification failed:", err);
@@ -57,13 +60,16 @@ const VerifyPaymentPage = () => {
         const status = err?.response?.status;
         const serverMsg = err?.response?.data?.message;
 
-        if (status === 404) {
+        if (err.code === 'ECONNABORTED') {
+          setStatusMsg('Confirming payment took too long — the server may be unreachable. Your card may still have been charged; check My Bookings or try again.');
+        } else if (status === 404) {
           setStatusMsg(serverMsg || "Payment session not found.");
         } else if (status === 400) {
           setStatusMsg(serverMsg || "Payment not completed");
         } else {
-          setStatusMsg(serverMsg || "There was an error.");
+          setStatusMsg(serverMsg || "There was an error confirming your payment.");
         }
+        setFailed(true);
       }
     };
 
@@ -75,13 +81,31 @@ const VerifyPaymentPage = () => {
   }, [search, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center text-white p-4">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-4">
       <div className="text-center max-w-lg">
         <p className="mb-2">{statusMsg}</p>
-        <p className="text-sm opacity-70">
-          If this page shows 'session not found', try copying the 'session_id'
-          from your url and verify it with your backend logs or support contact.
-        </p>
+        {failed && (
+          <>
+            <p className="text-sm opacity-70 mb-6">
+              If this keeps happening, copy the 'session_id' from the URL above
+              and check it against your backend logs.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-5 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 transition-colors"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => navigate('/bookings', { replace: true })}
+                className="px-5 py-2 rounded-lg border border-gray-500 hover:bg-gray-800 transition-colors"
+              >
+                Go to My Bookings
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

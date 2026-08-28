@@ -42,9 +42,6 @@ const Login = () => {
         if (user) localStorage.setItem('user', JSON.stringify(user));
 
 
-    console.log("Login details", credentials);
-    localStorage.setItem("authToken", "your-authentication-token-here");
-
     toast.success(message || 'Login Successful! Welcome back', {
       position: 'top-right',
       hideProgressBar: false,

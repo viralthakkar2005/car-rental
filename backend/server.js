@@ -1,9 +1,9 @@
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-dotenv.config(); // ✅ load env vars first, before anything reads process.env
-
 import path from 'path';
+
 import helmet from 'helmet';
 import { fileURLToPath } from 'url';
 
@@ -12,6 +12,7 @@ import userRouter from './routes/userRoutes.js';
 import carRouter from './routes/carRoutes.js';
 import bookingRouter from './routes/bookingRoutes.js';
 import paymentRouter from './routes/paymentRoutes.js';
+import adminRouter from './routes/adminRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -46,11 +47,21 @@ app.use('/api/auth', userRouter);
 app.use('/api/cars', carRouter);
 app.use('/api/bookings', bookingRouter);
 app.use('/api/payments', paymentRouter);
+app.use('/api/admin', adminRouter);
 
 app.get('/api/ping', (req, res) => res.json({ ok: true, time: Date.now() }));
 
 app.get('/', (req, res) => {
   res.send('hii there');
+});
+
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    success: false,
+    message: err.message || 'Server Error',
+  });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

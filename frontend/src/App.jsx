@@ -1,4 +1,3 @@
-
 import './App.css'
 import {Navigate, Route, Routes, useLocation} from 'react-router-dom';
 import Home from './components/Home';
@@ -11,6 +10,7 @@ import CarDetailPage from './components/CarDetailPage';
 import { FaArrowUp } from 'react-icons/fa';
 import SignUp from './components/Signup';
 import VerifyPaymentPage from './components/VerifyPaymentPage';
+import MyBookingPage from './components/MyBookingPage';
 
 const ProtectedRoute = ({ children }) => {
   const location = useLocation();
@@ -79,6 +79,12 @@ function App() {
 
       <Route path='/success' element={<VerifyPaymentPage/>} />
       <Route path='/cancel' element={<VerifyPaymentPage/>} />
+
+      <Route path='/bookings' element={
+        <ProtectedRoute>
+          <MyBookingPage/>
+        </ProtectedRoute>
+      } />
 
       <Route path='*' element={<Navigate to='/' replace/>}/>
         

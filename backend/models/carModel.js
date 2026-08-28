@@ -8,7 +8,7 @@ const carBookingSubSchema = new Schema({
 
   status: {
     type: String,
-    enum: ['pending', 'active', 'completed', 'cancelled', 'upcoming'],
+    enum: ['pending', 'approved', 'rejected', 'active', 'completed', 'cancelled', 'upcoming'],
     default: 'pending',
   },
 },
@@ -25,9 +25,11 @@ const carSchema = new Schema({
   transmission: { type: String, default: 'Automatic' },
   fuelType: { type: String, default: 'Gasoline' },
   mileage: { type: Number, default: 0 },
+  description: { type: String, default: '' },
   dailyRate: { type: Number, required: true },
   status: { type: String, enum: ['available','rented','maintenance'], default: 'available' },
   image: { type: String, default: '' },
+  imagePublicId: { type: String, default: '' }, // Cloudinary public_id, needed to delete the image later
   createdAt: { type: Date, default: Date.now },
 
   bookings: { type: [carBookingSubSchema], default: [] },         //show the id
@@ -38,7 +40,7 @@ function rangesOverlap(aStart, aEnd, bStart, bEnd) {
 }
 
 carSchema.methods.isAvailableForRange = function (
-  requestedPickup, requestedReturn, blockingStatuses = ['pending', 'active', 'upcoming']
+  requestedPickup, requestedReturn, blockingStatuses = ['pending', 'approved', 'active', 'upcoming']
 ) {
   if (!requestedPickup || !requestedReturn) return false;
 
@@ -67,7 +69,7 @@ carSchema.methods.getAvailabilitySummary = function (nowDate = new Date()) {
 
   //filter for the booking that shpuld blovk avabilblity
   const blockable = (this.bookings || [])
-    .filter(b => ['pending','active','upcoming'].includes(b.status))
+    .filter(b => ['pending','approved','active','upcoming'].includes(b.status))
     .map(b => ({ ...b, pickupDate: new Date(b.pickupDate), returnDate: new Date(b.returnDate) }))
     .sort((x, y) => x.pickupDate - y.pickupDate);
 
@@ -94,7 +96,7 @@ carSchema.statics.computeAvailabilityForCars = function (cars, nowDate = new Dat
   const now = new Date(nowDate);
   return cars.map(car => {
     const bookings = (car.bookings || [])
-      .filter(b => ['pending','active','upcoming'].includes(b.status))
+      .filter(b => ['pending','approved','active','upcoming'].includes(b.status))
       .map(b => ({ ...b, pickupDate: new Date(b.pickupDate), returnDate: new Date(b.returnDate) }))
       .sort((x, y) => x.pickupDate - y.pickupDate);
 

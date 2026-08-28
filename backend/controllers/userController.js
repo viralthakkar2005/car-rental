@@ -5,12 +5,19 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const TOKEN_EXPIRES_IN = '24h';
-const JWT_SECRET = "viral"; // ✅ fixed casing + pulled from env
 
 const createToken = (userId) => {
+  const JWT_SECRET = process.env.JWT_SECRET; // read at call time, not at module load time
   if (!JWT_SECRET) throw new Error('JWT_SECRET is not defined on the server');
   return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: TOKEN_EXPIRES_IN });
 };
+
+const publicUser = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: 'user',
+});
 
 export async function register(req, res) {
   try {
@@ -21,7 +28,7 @@ export async function register(req, res) {
 
     if (!name || !email || !password) {
       return res.status(400).json({
-        success: false, // ✅ fixed typo 'sucess' -> 'success' (also do this in frontend if you check this field!)
+        success: false,
         message: "all fields are required"
       });
     }
@@ -52,6 +59,9 @@ export async function register(req, res) {
     const newId = new mongoose.Types.ObjectId();
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Registration always creates a normal user. Admin accounts live in a
+    // completely separate collection (see models/adminModel.js) and are
+    // never created through this or any public endpoint.
     const user = new User({
       _id: newId,
       name,
@@ -63,15 +73,11 @@ export async function register(req, res) {
 
     const token = createToken(newId.toString());
 
-    return res.status(201).json({ // ✅ fixed: was res.status() with no code
+    return res.status(201).json({
       success: true,
       message: 'Account created successfully',
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email
-      }
+      user: publicUser(user),
     });
 
   } catch (err) {
@@ -82,7 +88,6 @@ export async function register(req, res) {
         message: 'User already exists'
       });
     }
-    // ✅ fixed: unreachable code moved out of the if-block
     return res.status(500).json({
       success: false,
       message: 'Server Error'
@@ -122,24 +127,36 @@ export async function login(req, res) {
       });
     }
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: TOKEN_EXPIRES_IN }); // ✅ fixed JWT_SECRET reference
+    const token = createToken(user._id.toString());
 
-    return res.status(200).json({ // ✅ fixed: was `exports.status(...)`
+    return res.status(200).json({
       success: true,
       message: 'login successful',
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email
-      }
+      user: publicUser(user),
     });
 
-  } catch (err) { // ✅ fixed: catch block now correctly names `err`
+  } catch (err) {
     console.error('login error', err);
     return res.status(500).json({
       success: false,
       message: 'server error'
     });
   }
+}
+
+// GET current user's profile from their token — used by the frontend to
+// validate a stored token and refresh the cached user object.
+export async function getProfile(req, res) {
+  // authMiddleware has already loaded req.user (password excluded)
+  return res.status(200).json({
+    success: true,
+    user: publicUser(req.user),
+  });
+}
+
+// Logout is stateless with JWT (the token is simply discarded client-side),
+// but we still expose an endpoint so the frontend has something to call.
+export async function logout(req, res) {
+  return res.status(200).json({ success: true, message: 'Logged out' });
 }

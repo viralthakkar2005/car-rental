@@ -7,6 +7,7 @@ import { navbarStyles as styles } from "../assets/dummyStyles";
 import axios from "axios";
 
 const LOGOUT_ENDPOINT = "/api/auth/logout";
+const ME_ENDPOINT = "/api/auth/me";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);

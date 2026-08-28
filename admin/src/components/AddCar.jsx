@@ -1,10 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { AddCarPageStyles, toastStyles } from '../assets/dummyStyles';
-import axios from 'axios';
 import {toast, ToastContainer} from 'react-toastify';
-
-const baseURL = 'http://localhost:5000/';
-const api = axios.create({ baseURL })
+import api from '../utils/api';
 
 const AddCar = () => {
   const initialFormData = {
@@ -25,6 +22,7 @@ const AddCar = () => {
 
 
   const [data, setData] = useState(initialFormData);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileRef = useRef(null);
 
   const handleChange = useCallback((e) => {
@@ -91,6 +89,8 @@ const AddCar = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return; // guard against double-submit (double-click, or resubmitting while a slow request is still in flight) creating duplicate cars
+    setIsSubmitting(true);
     const carNameForToast = data.carName || "";
 
     try {
@@ -115,9 +115,7 @@ const AddCar = () => {
 
       if (data.image) formData.append("image", data.image);
 
-      await api.post("/api/cars", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post("/api/cars", formData);
 
       showToast(
         "success",
@@ -162,6 +160,8 @@ const AddCar = () => {
           ></path>
         </svg>
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -487,8 +487,14 @@ const AddCar = () => {
           </div>
 
           <div className="mt-12 flex justify-center">
-            <button type="submit" className={AddCarPageStyles.submitButton}>
-              <span className={AddCarPageStyles.buttonText}>List Your Car</span>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`${AddCarPageStyles.submitButton} ${isSubmitting ? "opacity-60 cursor-not-allowed" : ""}`}
+            >
+              <span className={AddCarPageStyles.buttonText}>
+                {isSubmitting ? "Listing..." : "List Your Car"}
+              </span>
               <svg
                 className={AddCarPageStyles.iconInline}
                 fill="none"

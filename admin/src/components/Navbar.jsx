@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { navbarStyles as s } from '../assets/dummyStyles'
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import logo from '../assets/logocar.png'
-import { CalendarCheck, Car, PlusCircle,Menu,X } from 'lucide-react';
+import { CalendarCheck, Car, PlusCircle, Menu, X, LogOut } from 'lucide-react';
 
 const navLinks = [
   { path: "/", icon: PlusCircle, label: "Add Car" },
@@ -16,6 +16,13 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    navigate('/login', { replace: true });
+  };
 
   useEffect(() => {
   const onScroll = () => setScrolled(window.scrollY > 10);
@@ -81,6 +88,14 @@ useEffect(() => {
                 </div>
               </div>
 
+              <button
+                onClick={handleLogout}
+                className="hidden lg:flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors duration-300"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+
               <div className={s.mobileMenuButton}>
                 <button ref={buttonRef} onClick={() => setIsOpen((v) => !v)} className={s.menuButton} aria-label='="Toggle Menu' aria-expanded={isOpen}>
                   {isOpen ? (<X className='h-5 w-5' />)
@@ -111,6 +126,13 @@ useEffect(() => {
                 </Link>
               );
             })}
+            <button
+              onClick={handleLogout}
+              className={`${s.mobileNavLink} w-full text-left`}
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Logout</span>
+            </button>
           </div>
         </div>
       )}

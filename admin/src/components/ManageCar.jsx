@@ -12,14 +12,8 @@ import {
   FaTimes,
 } from "react-icons/fa";
 
-import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
-
-const BASE = "http://localhost:5000";
-const api = axios.create({
-  baseURL: BASE,
-  headers: { Accept: "application/json" },
-});
+import api, { BASE_URL as BASE } from '../utils/api';
 
 // Utility functions
 const makeImageUrl = (img) => {

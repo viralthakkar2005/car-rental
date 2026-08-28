@@ -285,6 +285,8 @@ export const BookingPageStyles = {
 export const statusConfig = {
   completed: { bg: "bg-green-900/20", text: "text-green-400" },
   pending: { bg: "bg-amber-900/20", text: "text-amber-400" },
+  approved: { bg: "bg-blue-900/20", text: "text-blue-400" },
+  rejected: { bg: "bg-red-900/20", text: "text-red-400" },
   active: { bg: "bg-orange-900/20", text: "text-orange-400" },
   cancelled: { bg: "bg-red-900/20", text: "text-red-400" },
   default: { bg: "bg-gray-900/30", text: "text-gray-400" }

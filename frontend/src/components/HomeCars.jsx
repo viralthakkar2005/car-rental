@@ -115,164 +115,12 @@ const HomeCars = () => {
   const plural = (n, singular, pluralForm) =>
     n === 1 ? `1 ${singular}` : `${n} ${pluralForm ?? singular + "s"}`;
 
-  const computeEffectiveAvailability = (car) => {
-    const today = new Date();
-
-    if (Array.isArray(car.bookings) && car.bookings.length) {
-      const overlapping = car.bookings
-        .map((b) => {
-          const pickup = b.pickupDate ?? b.startDate ?? b.start ?? b.from;
-          const ret = b.returnDate ?? b.endDate ?? b.end ?? b.to;
-          if (!pickup || !ret) return null;
-          return { pickup: new Date(pickup), return: new Date(ret), raw: b };
-        })
-        .filter(Boolean)
-        .filter(
-          (b) =>
-            startOfDay(b.pickup) <= startOfDay(today) &&
-            startOfDay(today) <= startOfDay(b.return)
-        );
-
-      if (overlapping.length) {
-        overlapping.sort((a, b) => b.return - a.return);
-        return {
-          state: "booked",
-          until: overlapping[0].return.toISOString(),
-          source: "bookings",
-        };
-      }
-    }
-
-    if (car.availability) {
-      if (car.availability.state === "booked" && car.availability.until) {
-        return {
-          state: "booked",
-          until: car.availability.until,
-          source: "availability",
-        };
-      }
-      if (
-        car.availability.state === "available_until_reservation" &&
-        Number(car.availability.daysAvailable ?? -1) === 0
-      ) {
-        return {
-          state: "booked",
-          until: car.availability.until ?? null,
-          source: "availability-res-starts-today",
-          nextBookingStarts: car.availability.nextBookingStarts,
-        };
-      }
-      return { ...car.availability, source: "availability" };
-    }
-
-    return { state: "fully_available", source: "none" };
-  };
-
-  const computeAvailableMeta = (untilIso) => {
-    if (!untilIso) return null;
-    try {
-      const until = new Date(untilIso);
-      const available = new Date(until);
-      available.setDate(available.getDate() + 1);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return {
-        availableIso: available.toISOString(),
-        daysUntilAvailable: daysBetween(today, available),
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const renderAvailabilityBadge = (rawAvailability, car) => {
-    const effective = computeEffectiveAvailability(car);
-    if (!effective)
-      return (
-        <span className="px-2 py-1 text-xs rounded-md bg-green-50 text-green-700">
-          Available
-        </span>
-      );
-
-    if (effective.state === "booked") {
-      if (effective.until) {
-        const meta = computeAvailableMeta(effective.until);
-        if (meta?.availableIso) {
-          return (
-            <div className="flex flex-col items-end">
-              <span className="px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 font-semibold">
-                Booked — available on {formatDate(meta.availableIso)}
-              </span>
-              <small className="text-xs text-gray-400 mt-1">
-                until {formatDate(effective.until)}
-              </small>
-            </div>
-          );
-        }
-        return (
-          <div className="flex flex-col items-end">
-            <span className="px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 font-semibold">
-              Booked
-            </span>
-            {effective.until && (
-              <small className="text-xs text-gray-400 mt-1">
-                until {formatDate(effective.until)}
-              </small>
-            )}
-          </div>
-        );
-      }
-      return (
-        <div className="flex flex-col items-end">
-          <span className="px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 font-semibold">
-            Booked
-          </span>
-        </div>
-      );
-    }
-
-    if (effective.state === "available_until_reservation") {
-      const days = Number(effective.daysAvailable ?? -1);
-      if (!Number.isFinite(days) || days < 0) {
-        return (
-          <div className="flex flex-col items-end">
-            <span className="px-2 py-1 text-xs rounded-md bg-amber-50 text-amber-800 font-semibold">
-              Available
-            </span>
-            {effective.nextBookingStarts && (
-              <small className="text-xs text-gray-400 mt-1">
-                from {formatDate(effective.nextBookingStarts)}
-              </small>
-            )}
-          </div>
-        );
-      }
-      return (
-        <div className="flex flex-col items-end">
-          <span className="px-2 py-1 text-xs rounded-md bg-amber-50 text-amber-800 font-semibold">
-            Available — reserved in {plural(days, "day")}
-          </span>
-          {effective.nextBookingStarts && (
-            <small className="text-xs text-gray-400 mt-1">
-              from {formatDate(effective.nextBookingStarts)}
-            </small>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <span className="px-2 py-1 text-xs rounded-md bg-green-50 text-green-700">
-        Available
-      </span>
-    );
-  };
-
   const isBookDisabled = (car) => {
-    const effective = computeEffectiveAvailability(car);
-    if (car?.status && car.status !== "available") return true;
-    if (!effective) return false;
-    return effective.state === "booked";
+    // Same reasoning as Cars.jsx: booking-derived "available/booked" status
+    // isn't reliable for a physical rental business, so it no longer gates
+    // the Book button. Only an explicit admin status (e.g. "maintenance")
+    // does.
+    return car?.status && car.status !== "available";
   };
 
   const handleBook = (car) => {
@@ -386,10 +234,6 @@ const HomeCars = () => {
                   </span>
                 </div>
 
-                <div className="absolute right-4 top-4 z-20">
-                  {renderAvailabilityBadge(car.availability, car)}
-                </div>
-
                 <div className={styles.imageContainer}>
                   <img
                     src={imageSrc}
@@ -468,7 +312,7 @@ const HomeCars = () => {
                     aria-disabled={disabled}
                     title={
                       disabled
-                        ? "This car is currently booked or unavailable"
+                        ? "This car is currently unavailable"
                         : "Book this car"
                     }
                   >

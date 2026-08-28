@@ -42,9 +42,19 @@ const bookingSchema = new Schema(
     pickupDate: { type: Date, required: true },
     returnDate: { type: Date, required: true },
     bookingDate: { type: Date, default: Date.now },
+    // Fixed dealer branch locations — validated against the LOCATIONS list
+    // in the controller, not hard-coded as a schema enum, so the list can
+    // change without a migration.
+    pickupLocation: { type: String, required: true },
+    dropLocation: { type: String, required: true },
     status: {
+      // pending    = submitted, awaiting admin's physical availability check
+      // approved   = admin confirmed the car is available — customer may now pay
+      // rejected   = admin could not fulfill this booking
+      // active/upcoming/completed = normal paid-trip lifecycle
+      // cancelled  = cancelled by customer or admin
       type: String,
-      enum: ["pending", "active", "completed", "cancelled", "upcoming"],
+      enum: ["pending", "approved", "rejected", "active", "completed", "cancelled", "upcoming"],
       default: "pending",
     },
     amount: { type: Number, default: 0 },
@@ -58,101 +68,86 @@ const bookingSchema = new Schema(
   { timestamps: true }
 );
 
-bookingSchema.pre('validate', async function (next) {
-  if (!this.car?.id) return next();
+// Async hooks in modern Mongoose don't receive a next() callback — Mongoose
+// just awaits the promise. Throwing (or letting an error propagate) is how
+// you signal failure; no next() call needed or available.
+bookingSchema.pre('validate', async function () {
+  if (!this.car?.id) return;
 
   const { make, model, dailyRate } = this.car;
-  if (make || model || dailyRate) return next();
+  if (make || model || dailyRate) return;
 
-  try {
-    const carDoc = await Car.findById(this.car.id).lean();
-    if (carDoc) {
-      Object.assign(this.car, {
-        make: carDoc.make ?? this.car.make,
-        model: carDoc.model ?? this.car.model,
-        year: carDoc.year ?? this.car.year,
-        dailyRate: carDoc.dailyRate ?? this.car.dailyRate,
-        seats: carDoc.seats ?? this.car.seats,
-        transmission: carDoc.transmission ?? this.car.transmission,
-        fuelType: carDoc.fuelType ?? this.car.fuelType,
-        mileage: carDoc.mileage ?? this.car.mileage,
-        image: carDoc.image ?? this.car.image,
-      });
-      if (!this.carImage) this.carImage = carDoc.image || "";
-    }
-    next()
-  } catch (err) {
-    next(err);
+  const carDoc = await Car.findById(this.car.id).lean();
+  if (carDoc) {
+    Object.assign(this.car, {
+      make: carDoc.make ?? this.car.make,
+      model: carDoc.model ?? this.car.model,
+      year: carDoc.year ?? this.car.year,
+      dailyRate: carDoc.dailyRate ?? this.car.dailyRate,
+      seats: carDoc.seats ?? this.car.seats,
+      transmission: carDoc.transmission ?? this.car.transmission,
+      fuelType: carDoc.fuelType ?? this.car.fuelType,
+      mileage: carDoc.mileage ?? this.car.mileage,
+      image: carDoc.image ?? this.car.image,
+    });
+    if (!this.carImage) this.carImage = carDoc.image || "";
   }
 });
 
 
-const blockingStatuses = ['pending', 'active', 'upcoming'];
+const blockingStatuses = ['pending', 'approved', 'active', 'upcoming'];
 
-bookingSchema.post('save', async function (doc, next) {
-  try {
-    if (!doc.car?.id) return next();
+bookingSchema.post('save', async function (doc) {
+  if (!doc.car?.id) return;
 
-    const carId = doc.car.id;
-    const bookingEntry = {
-      bookingId: doc._id,
-      pickupDate: doc.pickupDate,
-      returnDate: doc.returnDate,
-      status: doc.status,
-    };
+  const carId = doc.car.id;
+  const bookingEntry = {
+    bookingId: doc._id,
+    pickupDate: doc.pickupDate,
+    returnDate: doc.returnDate,
+    status: doc.status,
+  };
 
-    if (blockingStatuses.includes(doc.status)) {
-      await Car.findByIdAndUpdate(
-        carId,
-        {
-          $pull: { bookings: { bookingId: doc._id } }
-        },
-        { new: true }
-      ).exec();
+  // IMPORTANT: if this save happened inside a transaction (e.g. createBooking
+  // uses session.withTransaction(...)), we MUST reuse that same session here.
+  // Without it, this hook fires as a second, un-sessioned write to the same
+  // Car document *while the transaction is still open* — that write and the
+  // transaction's own pending write to Car race each other and MongoDB
+  // reports it as "Write conflict during plan execution and yielding is
+  // disabled" (error 112). Since the collision is between our own two writes
+  // every single time (not an occasional overlap from another user), it
+  // isn't actually transient and retrying the transaction never helps.
+  const session = doc.$session() || undefined;
 
-      await Car.findByIdAndUpdate(
-        carId,
-        { $pull: { bookings: bookingEntry } },
-        { new: true }
-      ).exec();
-    }
+  // Always clear any stale entry for this booking first, then re-add it
+  // only if its current status should block the car's availability.
+  // (Previously this logic was inverted: it removed the entry for
+  // blocking statuses and added it for non-blocking ones.)
+  await Car.findByIdAndUpdate(
+    carId,
+    { $pull: { bookings: { bookingId: doc._id } } },
+    { session }
+  ).exec();
 
-    else {
-      await Car.findByIdAndUpdate(
-        carId,
-        {
-          $push: { bookings: { bookingId: doc._id } }
-        },
-        { new: true }
-      ).exec();
-    }
-
-    next();
-  }
-
-  
-  catch (err) {
-    next(err);
-  }
-});
-
-
-bookingSchema.post('remove', async function (doc, next) {
-  try {
-    if (!doc.car?.id) return next();
+  if (blockingStatuses.includes(doc.status)) {
     await Car.findByIdAndUpdate(
-      doc.car.id,
-      {
-        $pull: { bookings: { bookingId: doc._id } }
-      }
+      carId,
+      { $push: { bookings: bookingEntry } },
+      { session }
     ).exec();
-    next();
   }
+});
 
-  catch (err) {
-    next(err);
-  }
+// Mongoose 7+ removed Document#remove(); deleteOne({ document: true }) is the
+// modern equivalent — it fires when a document's own .deleteOne() is called.
+bookingSchema.post('deleteOne', { document: true, query: false }, async function (doc) {
+  if (!doc.car?.id) return;
+  await Car.findByIdAndUpdate(
+    doc.car.id,
+    {
+      $pull: { bookings: { bookingId: doc._id } }
+    }
+  ).exec();
 })
 
 export default mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
-
