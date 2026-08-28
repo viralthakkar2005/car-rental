@@ -18,11 +18,10 @@ import {
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import axios from "axios";
-import carsData from "../assets/carsData";
 import { carDetailStyles } from "../assets/dummyStyles";
 import { LOCATIONS } from "../assets/locations";
+import { API_BASE } from "../utils/api";
 
-const API_BASE = "http://localhost:5000";
 const api = axios.create({
   baseURL: API_BASE,
   headers: { Accept: "application/json" },
@@ -97,13 +96,6 @@ const CarDetailPage = () => {
 
   useEffect(() => {
     if (car) {
-      setCurrentImage(0);
-      return;
-    }
-
-    const local = carsData.find((c) => String(c.id) === String(id));
-    if (local) {
-      setCar(local);
       setCurrentImage(0);
       return;
     }

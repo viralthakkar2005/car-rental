@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, Users, Fuel, Gauge, CheckCircle, Zap } from "lucide-react";
 import axios from "axios";
 import { homeCarsStyles as styles } from "../assets/dummyStyles";
+import { API_BASE } from "../utils/api";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const startOfDay = (d) => {
@@ -23,7 +24,7 @@ const HomeCars = () => {
   const [hoveredCard, setHoveredCard] = useState(null);
   const abortRef = useRef(null);
 
-  const base = "http://localhost:5000";
+  const base = API_BASE;
   const api = axios.create({
     baseURL: base,
     headers: { Accept: "application/json" },

@@ -5,6 +5,7 @@ import { FaArrowLeft, FaEnvelope, FaEye, FaEyeSlash, FaLock, FaUser, FaCheck } f
 import logo from '../assets/logocar.png'
 import { toast, ToastContainer } from "react-toastify";
 import axios from 'axios';
+import { API_BASE } from '../utils/api';
 
 const SignUp = () => {
 
@@ -49,7 +50,7 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      const base = 'http://localhost:5000';
+      const base = API_BASE;
       const url = `${base}/api/auth/register`;
 
       const res = await axios.post(url, formData, {
@@ -86,11 +87,6 @@ const SignUp = () => {
 
       if (err.response) {
         // Server responded with a status outside 2xx
-        console.log(
-          "Server response (debug):",
-          err.response.status,
-          err.response.data
-        );
         const serverMessage =
           err.response.data?.message ||
           err.response.data?.error ||
@@ -98,7 +94,6 @@ const SignUp = () => {
         toast.error(serverMessage, { theme: "dark" });
       } else if (err.request) {
         // Request made but no response
-        console.log("No response received (debug):", err.request);
         toast.error(
           "No response from server — ensure backend is running and CORS is configured.",
           {

@@ -5,6 +5,7 @@ import { FaBars, FaTimes, FaUser, FaSignOutAlt } from "react-icons/fa";
 import logo from "../assets/logocar.png";
 import { navbarStyles as styles } from "../assets/dummyStyles";
 import axios from "axios";
+import { API_BASE } from "../utils/api";
 
 const LOGOUT_ENDPOINT = "/api/auth/logout";
 const ME_ENDPOINT = "/api/auth/me";
@@ -29,7 +30,7 @@ const Navbar = () => {
   const buttonRef = useRef(null);
   const abortRef = useRef(null);
 
-  const base = "http://localhost:5000";
+  const base = API_BASE;
   const api = axios.create({
     baseURL: base,
     headers: { Accept: "application/json" },

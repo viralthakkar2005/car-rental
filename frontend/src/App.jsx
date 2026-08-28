@@ -8,7 +8,6 @@ import CarPage from './components/CarPage';
 import { useEffect, useState } from 'react';
 import CarDetailPage from './components/CarDetailPage';
 import { FaArrowUp } from 'react-icons/fa';
-import SignUp from './components/Signup';
 import VerifyPaymentPage from './components/VerifyPaymentPage';
 import MyBookingPage from './components/MyBookingPage';
 
@@ -63,17 +62,11 @@ function App() {
         } />
 
 
-        <Route path='/booking'element={
-        <ProtectedRoute>
-          <CarDetailPage />
-        </ProtectedRoute>
-      }/>
-
        <Route path='/login' element={<RedirectIfAuthenticated>
           <Login/>
        </RedirectIfAuthenticated>} />
         <Route path='/signup' element={<RedirectIfAuthenticated>
-          <SignUp/>
+          <Signup/>
        </RedirectIfAuthenticated>} />
 
 

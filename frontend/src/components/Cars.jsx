@@ -10,6 +10,7 @@ import {
 } from "react-icons/fa";
 import axios from "axios";
 import { carPageStyles } from "../assets/dummyStyles";
+import { API_BASE } from "../utils/api";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const startOfDay = (d) => {
@@ -29,7 +30,7 @@ const CarS = () => {
   const [error, setError] = useState("");
 
   const abortControllerRef = useRef(null);
-  const base = "http://localhost:5000";
+  const base = API_BASE;
   const limit = 12;
   const fallbackImage = `${base}/uploads/default-car.png`;
 

@@ -24,8 +24,8 @@ import {
   FaHourglassHalf,
 } from "react-icons/fa";
 import { myBookingsStyles as s } from "../assets/dummyStyles";
+import { API_BASE } from "../utils/api";
 
-const API_BASE = "http://localhost:5000";
 const TIMEOUT = 15000;
 
 // ---------- Helpers ----------

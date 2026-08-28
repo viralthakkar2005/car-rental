@@ -77,15 +77,27 @@ export const createBooking = async (req, res) => {
       }
 
       const carId = carSummary.id;
-      const overlappingCount = await Booking.countDocuments({
+      const conflict = await Booking.findOne({
         "car.id": carId,
         status: { $in: BLOCKING_STATUSES },
         pickupDate: { $lte: ret },
         returnDate: { $gte: pickup },
-      }).session(session);
+      })
+        .sort({ pickupDate: 1 })
+        .session(session)
+        .lean();
 
-      if (overlappingCount > 0) {
-        controlledFailure = { status: 409, message: 'Car already booked' };
+      if (conflict) {
+        const fmt = (d) =>
+          new Date(d).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+        controlledFailure = {
+          status: 409,
+          message: `This car is already booked from ${fmt(conflict.pickupDate)} to ${fmt(conflict.returnDate)}. Please choose different dates.`,
+        };
         return;
       }
 

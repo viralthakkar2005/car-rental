@@ -5,6 +5,7 @@ import { FaArrowLeft, FaLock, FaUser, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { toast, ToastContainer } from 'react-toastify';
 import logo from '../assets/logocar.png'
 import axios from 'axios';
+import { API_BASE } from '../utils/api';
 
 const Login = () => {
 
@@ -28,7 +29,7 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try{
-    const base = 'http://localhost:5000';
+    const base = API_BASE;
       const url = `${base}/api/auth/login`;
 
       const res = await axios.post(url, credentials , {
