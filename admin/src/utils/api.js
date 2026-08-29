@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-export const BASE_URL = 'http://localhost:5000';
+// Single source of truth for the backend URL. Set VITE_API_URL in a .env
+// file (see .env.example) when deploying — otherwise this falls back to
+// the local dev backend.
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Shared axios instance for every admin API call. Automatically attaches
 // the logged-in admin's JWT (if present) and redirects to /login on a 401

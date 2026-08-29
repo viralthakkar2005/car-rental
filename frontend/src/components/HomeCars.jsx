@@ -30,7 +30,7 @@ const HomeCars = () => {
     headers: { Accept: "application/json" },
   });
   const limit = 6;
-  const fallbackImage = `${base}/uploads/default-car.png`;
+  const fallbackImage = "/default-car.png";
 
   useEffect(() => {
     const t = setTimeout(() => setAnimateCards(true), 300);

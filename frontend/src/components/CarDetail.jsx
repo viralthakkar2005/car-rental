@@ -30,12 +30,12 @@ const api = axios.create({
 const todayISO = () => new Date().toISOString().split("T")[0];
 
 const buildImageSrc = (image) => {
-  if (!image) return `${API_BASE}/uploads/default-car.png`;
+  if (!image) return "/default-car.png";
   if (Array.isArray(image)) image = image[0];
   if (!image || typeof image !== "string")
-    return `${API_BASE}/uploads/default-car.png`;
+    return "/default-car.png";
   const t = image.trim();
-  if (!t) return `${API_BASE}/uploads/default-car.png`;
+  if (!t) return "/default-car.png";
   if (t.startsWith("http://") || t.startsWith("https://")) return t;
   if (t.startsWith("/")) return `${API_BASE}${t}`;
   return `${API_BASE}/uploads/${t}`;
@@ -43,7 +43,7 @@ const buildImageSrc = (image) => {
 
 const handleImageError = (
   e,
-  fallback = `${API_BASE}/uploads/default-car.png`
+  fallback = "/default-car.png"
 ) => {
   const img = e?.target;
   if (!img) return;

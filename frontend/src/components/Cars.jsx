@@ -32,7 +32,7 @@ const CarS = () => {
   const abortControllerRef = useRef(null);
   const base = API_BASE;
   const limit = 12;
-  const fallbackImage = `${base}/uploads/default-car.png`;
+  const fallbackImage = "/default-car.png";
 
   useEffect(() => {
     fetchCars();
